@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% File    : eg_pdf.erl
 %%% Author  :  <wright@servicelevel.net>
-%%% Description : 
+%%% Description :
 %%%
 %%% Created : 25 April 2010 by  <wright@servicelevel.net>
 %%%-------------------------------------------------------------------
@@ -16,7 +16,7 @@
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-   terminate/2, code_change/3, start_link/1]).
+   terminate/2, code_change/3, start_link/2]).
 
 
 
@@ -54,6 +54,7 @@
          mirror_xaxis/2, mirror_yaxis/2,
          move_to/2,
          new/0,
+         new/1,
          new_page/1,
          page_script/2,
          pagesize/1, pagesize/2,
@@ -98,7 +99,7 @@
          text_rotate_position/4,
          textbr/2,
          text_transform/7,
-         transform/7, 
+         transform/7,
 	 translate/3,
 	 xref/2
         ]).
@@ -108,9 +109,9 @@
 
 init_pdf_context()->
     {{Year,Month,Day},{Hrs,Min,Sec}} = calendar:local_time(),
-    #pdfContext{info=#info{creator="Erlang", 
+    #pdfContext{info=#info{creator="Erlang",
 			   creationDate= {{Year,Month,Day},{Hrs,Min,Sec}},
-			   producer="erlguten-3.1", 
+			   producer="erlguten-3.1",
 			   author="",
 			   title="",
 			   subject="",
@@ -124,11 +125,12 @@ init_pdf_context()->
 
 %% @doc Spawn pdf building process
 new()->
-    io:format("New pdf~n",[]),
-    {ok, PDF} = start_link( [init_pdf_context(), <<>>] ),
-    PDF.
+    new(pdf).
 
-%% @doc Export to PDF file format 
+new(ProcessId) ->
+    start_link(ProcessId, [init_pdf_context(), <<>>]).
+
+%% @doc Export to PDF file format
 %% return: {PDFDoc::binary(), PageNo::integer()} | exit(Reason)
 export(PID)->
   case gen_server:call(PID, {export}, infinity) of
@@ -147,8 +149,8 @@ delete(PID)->
 get_state(PID) ->
   gen_server:call(PID, {get_state}).
 
-%% @doc Add current page context to PDF document and start on a new page 
-%% Note page 1 is already created  by default and  current page set 
+%% @doc Add current page context to PDF document and start on a new page
+%% Note page 1 is already created  by default and  current page set
 %% to it after creation of PDF context.
 new_page(PID)->
    case gen_server:call( PID, {get_new_page}, infinity) of
@@ -164,7 +166,7 @@ page_script(PID, Script) ->
     gen_server:cast(PID, {page_script, Script}).
 
 
-%% @doc Go to a page already created.    
+%% @doc Go to a page already created.
 set_page(PID, PageNo)->
     gen_server:cast(PID, {page,{set, PageNo}}).
 
@@ -176,30 +178,30 @@ get_page_no(PID)->
     	{'EXIT', PID, Reason} ->
     	    exit(Reason)
     end.
-    
+
 %% --- Info -----
 %% @doc set the Author atribute of the PDF
 
 set_author(PID,Author)->
       gen_server:cast(PID, {info, {author, Author}} ).
-      
+
 %% @doc set the Title atribute of the PDF
 
 set_title(PID,Title)->
     gen_server:cast(PID, {info, {title, Title}} ).
-      
+
 %% @doc set the Subject atribute of the PDF
 
 set_subject(PID,Subject)->
     gen_server:cast(PID, {info, {subject, Subject}} ).
-      
-%% @doc set the Date atribute of the PDF 
-   
+
+%% @doc set the Date atribute of the PDF
+
 set_date(PID,Year,Month,Day)->
     gen_server:cast(PID, {info, {date, {Year,Month,Day}}} ).
-      
-%% @doc set the Keywords atribute of the PDF 
-   
+
+%% @doc set the Keywords atribute of the PDF
+
 set_keywords(PID, Keywords)->
     gen_server:cast(PID, {info, {keywords, Keywords}} ).
 
@@ -243,11 +245,11 @@ pagesize(tabloid)        -> pagesize( 792, 1224 ).
 %% create a full page bounding box for a page of size Width x Height
 pagesize(Width, Height) -> {0,0,Width,Height}.
 
-set_pagesize(PID, Size)-> 
+set_pagesize(PID, Size)->
   gen_server:cast(PID, {mediabox, pagesize(Size) }).
 
 
-set_pagesize(PID, Width, Height) -> 
+set_pagesize(PID, Width, Height) ->
   gen_server:cast(PID, {mediabox, pagesize(Width, Height) }).
 
 %% -- Fonts --
@@ -264,9 +266,9 @@ get_string_width(_PID, Fontname, PointSize, Str)->
     get_string_width(Fontname, PointSize, Str).
 
 get_string_width(Fontname, PointSize, Str)->
-    {richText, Inline} = eg_richText:str2richText(Fontname, PointSize, 
+    {richText, Inline} = eg_richText:str2richText(Fontname, PointSize,
 						  0, default, true, Str),
-    trunc(lists:foldl(fun(A, Accu) -> eg_richText:width(A) + Accu end, 
+    trunc(lists:foldl(fun(A, Accu) -> eg_richText:width(A) + Accu end,
 		      0, Inline) /1000).
 
 %% units of measure
@@ -279,26 +281,26 @@ cms(X) -> round((X * 72.21) / 2.54).
 %% @spec color(Color::atom() | {R,G,B}) -> {R,G,B}
 %% @doc  R,G,B = 0-255
 %%
-%%      This may be useful to lookup the rgb value of the color names 
+%%      This may be useful to lookup the rgb value of the color names
 color(Color) ->
     eg_pdf_op:color(Color).
 
 %% Text
 
 begin_text(PID)-> append_stream(PID, eg_pdf_op:begin_text() ).
-    
+
 end_text(PID)  -> append_stream(PID, eg_pdf_op:end_text() ).
-     
+
 break_text(PID)-> append_stream(PID, eg_pdf_op:break_text() ).
-    
+
 text(PID, Text) ->  append_stream(PID, eg_pdf_op:text(Text) ).
 
 textbr(PID,Text)-> append_stream(PID, eg_pdf_op:textbr(Text) ).
-    
+
 kernedtext(PID, Text)-> append_stream(PID, eg_pdf_op:kernedtext(Text) ).
 
 set_text_pos(PID, X, Y)->  append_stream(PID, eg_pdf_op:set_text_pos(X,Y)).
-		      
+
 set_text_leading(PID, L)-> append_stream( PID, eg_pdf_op:set_text_leading(L) ).
 
 
@@ -307,7 +309,7 @@ set_text_rendering(PID, MODE) ->
 
 
 set_char_space(PID, CS) -> append_stream(PID, eg_pdf_op:set_char_space(CS) ).
-    
+
 set_word_space(PID, WS) -> append_stream(PID, eg_pdf_op:set_word_space(WS) ).
 
 set_text_scale(PID, SC) -> append_stream(PID, eg_pdf_op:set_text_scale(SC) ).
@@ -317,7 +319,7 @@ set_text_rise(PID, RISE)-> append_stream(PID, eg_pdf_op:set_text_rise(RISE)).
 
 %% Graphics operators
 path(PID, Type) -> append_stream(PID, eg_pdf_op:path(Type)).
-    
+
 move_to(PID,P)-> append_stream(PID, eg_pdf_op:move_to(P) ).
 
 line(PID,From_To)          ->  append_stream(PID, eg_pdf_op:line(From_To) ).
@@ -344,13 +346,13 @@ grid(PID,XList,YList)->  append_stream(PID, eg_pdf_op:grid(XList,YList)).
 
 bezier(PID,{X1,Y1},{X2,Y2},{X3,Y3},{X4,Y4})->
     append_stream(PID, eg_pdf_op:bezier({X1,Y1},{X2,Y2},{X3,Y3},{X4,Y4})).
-    
+
 %% @doc bezier/9 (PID,X1,Y1,X2,Y2,X3,Y3,X4,Y4) <br/><br/>
 %% This moves to X1,Y1 point as its start and then creates a cubic Bezier curve to X4,Y4 using the points in between as the control points. Bezier paths should be stroked/closed/filled with a separate command.
 
 bezier(PID,X1,Y1,X2,Y2,X3,Y3,X4,Y4)->
     bezier(PID,{X1,Y1},{X2,Y2},{X3,Y3},{X4,Y4}).
-    
+
 %% @doc bezier_c/4 (PID,{X1,Y1},{X2,Y2},{X3,Y3}) <br/><br/>
 %% This takes the current point as its start and then creates a cubic Bezier curve to Point3 using the points in between as the control points. Bezier paths should be stroked/closed/filled with a separate command.
 
@@ -410,32 +412,32 @@ set_line_width(PID,W)->
     append_stream(PID, eg_pdf_op:set_line_width(W)).
 
 set_line_cap(PID,Mode)->
-    append_stream(PID, eg_pdf_op:set_line_cap(Mode)).    
+    append_stream(PID, eg_pdf_op:set_line_cap(Mode)).
 
 set_line_join(PID, Mode)->
-    append_stream(PID, eg_pdf_op:set_line_join(Mode)).    
+    append_stream(PID, eg_pdf_op:set_line_join(Mode)).
 
 set_miter_limit(PID,Limit)->
     append_stream(PID, eg_pdf_op:set_miter_limit(Limit)).
-        
 
-set_dash(PID, Mode) -> 
+
+set_dash(PID, Mode) ->
     append_stream(PID, eg_pdf_op:set_dash(Mode)).
 
-set_dash(PID, Array, Phase)-> 
+set_dash(PID, Array, Phase)->
     append_stream(PID, eg_pdf_op:set_dash(Array, Phase)).
 
 %% Graphics state
 save_state(PID)->
     append_stream(PID, eg_pdf_op:save_state() ).
-    
+
 restore_state(PID)->
     append_stream(PID, eg_pdf_op:restore_state() ).
 
 %% Change geometry
 transform(PID, A, B, C, D, E, F)->
     append_stream(PID, eg_pdf_op:transform(A, B, C, D, E, F)).
-    
+
 %% Change geometry
 text_transform(PID, A, B, C, D, E, F)->
     append_stream(PID, eg_pdf_op:text_transform(A, B, C, D, E, F)).
@@ -451,7 +453,7 @@ rotate(PID, Angle)->
 
 text_rotate(PID, Angle)->
     append_stream(PID, eg_pdf_op:text_rotate(Angle)).
-    
+
 text_rotate_position(PID, X, Y, Angle)->
     append_stream(PID, eg_pdf_op:text_rotate_position(X, Y, Angle)).
 
@@ -479,14 +481,14 @@ set_fill_color_RGB(PID,R,G,B)->
 set_stroke_color_RGB(PID,R,G,B)->
     append_stream(PID, eg_pdf_op:set_stroke_color_RGB(R,G,B)).
 
-%% Color is Name |{R,G,B}, Name = atom(), 0 < R,G,B < 255 
+%% Color is Name |{R,G,B}, Name = atom(), 0 < R,G,B < 255
 set_fill_color(PID, Color)->
     append_stream(PID, eg_pdf_op:set_fill_color(Color)).
 
 set_stroke_color(PID, Color)->
     append_stream(PID, eg_pdf_op:set_stroke_color(Color)).
 
-    
+
 %% Gray 0.0-Black 1.0-White)
 set_fill_gray(PID, Gray)->
     append_stream(PID, eg_pdf_op:set_fill_gray(Gray) ).
@@ -499,14 +501,14 @@ set_stroke_gray(PID, Gray)->
 %% image(PID, FilePath, Size)
 %% image(PID, FilePath, Pos, Size)
 %% Pos is {X,Y}
-%% Size is {width, W} | {height, H} | {W,H} | {max, W, H} 
+%% Size is {width, W} | {height, H} | {W,H} | {max, W, H}
 %% The max Size version can be used to set a max limit on width, height or both
 %% dimensions (undefined is a valid value for at most 1 W or H value)
 
 image(PID, FilePath)->
     save_state(PID),
     case image1(PID, FilePath, {size,{undefined,undefined}}) of
-	{error, Reason} -> 
+	{error, Reason} ->
 	    {error, Reason};
 	ok ->
 	    restore_state(PID)
@@ -525,7 +527,7 @@ image(PID, FilePath, {X,Y}, Size)  ->
     save_state(PID),
     translate(PID,X,Y),
     case image1(PID, FilePath, Size) of
-	{error, Reason} -> 
+	{error, Reason} ->
 	    {error, Reason};
 	ok ->
 	    restore_state(PID)
@@ -545,7 +547,7 @@ image1(PID, FilePath, {W, H}) when is_integer(W), is_integer(H)->
     image1(PID, FilePath, {size,{W,H}});
 image1(PID, FilePath, {size,Size})->
     case file:open(FilePath,read) of
-	{ok,IO} -> 
+	{ok,IO} ->
 	    file:close(IO),
 	    gen_server:cast(PID, {image, FilePath, Size});
 	{error, OpenError} ->
@@ -591,8 +593,8 @@ inBuiltFonts() ->
 %% Function: start_link() -> {ok,Pid} | ignore | {error,Error}
 %% Description: Starts the server
 %%--------------------------------------------------------------------
-start_link(Init) ->
-    gen_server:start_link({local,pdf}, ?MODULE, Init, []).
+start_link(ProcessId, Init) ->
+    gen_server:start_link({local, ProcessId}, ?MODULE, Init, []).
 
 %%====================================================================
 %% gen_server callbacks
@@ -617,21 +619,21 @@ init(Init) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling call messages
 %%--------------------------------------------------------------------
-    	
-handle_call({get_page_no}, _From, [PDFC, Stream]) ->	        
+
+handle_call({get_page_no}, _From, [PDFC, Stream]) ->
 	    {reply, {page, PDFC#pdfContext.currentpage}, [PDFC, Stream]};
 
-handle_call({get_new_page}, _From, [PDFC, Stream]) ->	      
-	    {Add, PageNo} = 
+handle_call({get_new_page}, _From, [PDFC, Stream]) ->
+	    {Add, PageNo} =
     		handle_newpage(PDFC#pdfContext.pages,
     			       PDFC#pdfContext.currentpage,
     			       [Stream]),
     {reply, {page, PageNo}, [PDFC#pdfContext{pages=Add, currentpage=PageNo}, <<>>]};
-	        
-handle_call({export}, _From, [PDFC, Stream]) ->	
+
+handle_call({export}, _From, [PDFC, Stream]) ->
 	    %% add last page if necessary before exporting
-	    PDF = case Stream of 
-      		      <<>> ->		    
+	    PDF = case Stream of
+      		      <<>> ->
       			  PageNo = PDFC#pdfContext.pages,
       			  handle_export(PDFC);
       		      _ ->
@@ -642,8 +644,8 @@ handle_call({export}, _From, [PDFC, Stream]) ->
       			  handle_export(PDFC#pdfContext{pages=Add})
       	    end,
 	    {reply, {export, PDF, PageNo}, [PDFC, Stream]};
-	    
-handle_call({get_state}, _From, [PDFC, Stream]) ->	        
+
+handle_call({get_state}, _From, [PDFC, Stream]) ->
 	    {reply, [PDFC, Stream], [PDFC, Stream]}.
 
 
@@ -653,53 +655,53 @@ handle_call({get_state}, _From, [PDFC, Stream]) ->
 %%                                      {stop, Reason, State}
 %% Description: Handling cast messages
 %%--------------------------------------------------------------------
-	    	    
-handle_cast({mediabox, Mediabox}, [PDFC, Stream]) ->	
+
+handle_cast({mediabox, Mediabox}, [PDFC, Stream]) ->
 	    {noreply, [PDFC#pdfContext{mediabox=Mediabox}, Stream]};
-	    	    
-handle_cast({delete},  [PDFC, Stream]) ->	
+
+handle_cast({delete},  [PDFC, Stream]) ->
 	    {stop, normal, [PDFC, Stream]};
-	    	    
-handle_cast({font, {set, Fontname, Size}}, [PDFC, Stream]) ->	
+
+handle_cast({font, {set, Fontname, Size}}, [PDFC, Stream]) ->
       {F,Alias,Fhand} = handle_setfont(PDFC#pdfContext.fonts, Fontname),
       S = list_to_binary(eg_pdf_op:set_font_by_alias(Alias, Size)),
       Binary = <<Stream/binary, S/binary>>,
       {noreply, [PDFC#pdfContext{fonts=F,font_handler=Fhand}, Binary]};
-      
-handle_cast({info,Info}, [PDFC, Stream]) ->	      
+
+handle_cast({info,Info}, [PDFC, Stream]) ->
 	    NewInfo = pdf_handle_info(PDFC#pdfContext.info, Info),
 	    {noreply,  [PDFC#pdfContext{info=NewInfo}, Stream]};
-	          
-handle_cast({stream, {append, String}}, [PDFC, Stream]) ->	    
+
+handle_cast({stream, {append, String}}, [PDFC, Stream]) ->
 	    B = list_to_binary(convert(PDFC#pdfContext.font_handler, String)),
 	    Binary = <<Stream/binary, B/binary, <<" ">>/binary>>,
 	    {noreply, [PDFC, Binary]};
-	     
-handle_cast({image, FilePath, Size}, [PDFC, Stream]) ->	    
-	    {I,IMG,{W,H},ProcSet} = handle_image(PDFC#pdfContext.images, 
-						 FilePath, Size, 
+
+handle_cast({image, FilePath, Size}, [PDFC, Stream]) ->
+	    {I,IMG,{W,H},ProcSet} = handle_image(PDFC#pdfContext.images,
+						 FilePath, Size,
 						 PDFC#pdfContext.procset),
 	    S = list_to_binary(eg_pdf_op:set_image(W,H, IMG)),
 	    Binary = <<Stream/binary, S/binary>>,
-	    {noreply, [PDFC#pdfContext{images=I,procset=ProcSet}, Binary]};	    
-    
-handle_cast({page_script, Script}, [PDFC, Stream]) ->	
+	    {noreply, [PDFC#pdfContext{images=I,procset=ProcSet}, Binary]};
+
+handle_cast({page_script, Script}, [PDFC, Stream]) ->
 	    %% io:format("New script ~p\n", [Script]),
 	    NewScript = handle_pagescript(PDFC#pdfContext.scripts,
 					  PDFC#pdfContext.currentpage,
 					  Script),
 	    {noreply, [PDFC#pdfContext{scripts=NewScript}, Stream]};
 
-handle_cast({page,{set,PageNo}}, [PDFC, Stream]) ->	
+handle_cast({page,{set,PageNo}}, [PDFC, Stream]) ->
 	    {NewPages,[NewStream]} = handle_setpage(PDFC#pdfContext.pages,PageNo,
-						  PDFC#pdfContext.currentpage, 
+						  PDFC#pdfContext.currentpage,
 						  [Stream]),
-	    {noreply, [PDFC#pdfContext{pages=NewPages,currentpage=PageNo}, NewStream]};	    
-  
-handle_cast({ensure_font, Fontname}, [PDFC, Stream]) ->	      
+	    {noreply, [PDFC#pdfContext{pages=NewPages,currentpage=PageNo}, NewStream]};
+
+handle_cast({ensure_font, Fontname}, [PDFC, Stream]) ->
 	    F = ensure_font( eg_font_map:handler(Fontname), PDFC#pdfContext.fonts),
 	    {noreply, [PDFC#pdfContext{fonts=F}, Stream]}.
-	    
+
 %%--------------------------------------------------------------------
 %% Function: handle_info(Info, State) -> {noreply, State} |
 %%                                       {noreply, State, Timeout} |
@@ -745,8 +747,8 @@ build_pdf(Info, Fonts, Images, Pages, MediaBox, ProcSet) ->
     NInfo = Free1 + 1,
     O5 = {{obj,NInfo,0}, mkInfo(Info)},
     {Root, NInfo, O0s ++ O1s ++ [O2|O3s] ++ [O4,O5]}.
-    
-mk_fonts([], I, Fs, Os) -> 
+
+mk_fonts([], I, Fs, Os) ->
     A = {{obj,I,0},{dict,lists:map(fun({Alias, FontObj}) ->
 		      {Alias, {ptr,FontObj,0}}
 	      end, lists:reverse(Fs))}},
@@ -801,7 +803,7 @@ encoding(M) ->
     %% "FontSpecific" encodings ...
     %% This seems to work for everything except those fonts
     %% which have a "FontSpecif" encoding.
-    %% *usally the encoding in the AFM file is 
+    %% *usally the encoding in the AFM file is
     %% "AdobeStandardEncoding" - but this gives an error
     %% for fonts with encoding "AppleStandard". Setting
     %% *everything* to MacRomanEncoding seems to work for all cases
@@ -978,7 +980,7 @@ mkPage(Parent, Contents, Script) ->
 mkPageContents(Str) ->
     {stream, Str}.
 
- 
+
 header() ->
     "%PDF-1.3" ++ [8#015,$%,8#342,8#343,8#317,8#323, 8#015,8#012].
 
@@ -1010,15 +1012,15 @@ add_start_xref(F, XrefStartPos) ->
 
 %% xref
 %% 0 9
-%% 0000000000 65535 f 
-%% 0000000033 00000 n 
-%% 0000000098 00000 n 
-%% 0000000144 00000 n 
-%% 0000000203 00000 n 
-%% 0000000231 00000 n 
-%% 0000000409 00000 n 
-%% 0000000721 00000 n 
-%% 0000000835 00000 n 
+%% 0000000000 65535 f
+%% 0000000033 00000 n
+%% 0000000098 00000 n
+%% 0000000144 00000 n
+%% 0000000203 00000 n
+%% 0000000231 00000 n
+%% 0000000409 00000 n
+%% 0000000721 00000 n
+%% 0000000835 00000 n
 %% trailer
 %% <<
 %% /Size 9
@@ -1058,8 +1060,8 @@ handle_export(PDFC)->
 			       {page, Val}
 		       end,
 		       Merged),
-    {_Root, Ninfo, Os} = 
-	build_pdf(PDFC#pdfContext.info, 
+    {_Root, Ninfo, Os} =
+	build_pdf(PDFC#pdfContext.info,
 		  PDFC#pdfContext.fonts,
 		  dict:to_list(PDFC#pdfContext.images),
 		  Pages,
@@ -1087,7 +1089,7 @@ handle_setfont(FontList, FontName)->
 	    %% [FontName,Handler,Index]),
 		  {ensure_font(Handler,FontList), "F"++ eg_pdf_op:i2s(Index), Handler}
     end.
-    
+
 ensure_font(Handler, FontList) ->
 	    case lists:member(Handler, FontList) of
 		true ->
@@ -1095,16 +1097,16 @@ ensure_font(Handler, FontList) ->
 		false ->
 		    [Handler|FontList]
 	    end.
-	    
+
 %% @doc  This updates the image dictionary from the pdfContext.images with this new image if
 %% it's not already present. It also scales the image information to to fit the maximum
 %% sizes received in the Size parameter. This may be {undefined,Height}, {Width, undefined} or {max, width, height}.
 %% Filepath is the key into the dictionary. If a dictionary entry already exists for the FIlepath
 %% it doesn't put it into the dictionary again, but it does calculate the bounding box for the image.
 %% When the number of color components is less than or equal to 2, the Procset has a tuple value
-%% of {A,B} where A can be undefined or imageb and B can be undefined or imagec. These cause the 
-%% listing of these procedure set in the PDf so that the related procedure set can be loaded in 
-%% the Postscript printing device. This is suppoed to be obsolete as of v. 1.4 PDFs. 
+%% of {A,B} where A can be undefined or imageb and B can be undefined or imagec. These cause the
+%% listing of these procedure set in the PDf so that the related procedure set can be loaded in
+%% the Postscript printing device. This is suppoed to be obsolete as of v. 1.4 PDFs.
 
 handle_image(ImageDict, FilePath, Size, ProcSet)->
     case dict:find(FilePath, ImageDict) of
@@ -1129,15 +1131,15 @@ handle_image(ImageDict, FilePath, Size, ProcSet)->
 					ImageDict),
 		    {NewDict, Alias, set_size(Size, {W1,H1}),
 		     imageBC(Ncomponents, ProcSet) };
-		
-		A -> 
+
+		A ->
 		    {error_not_yet_implemented_image_format,A}
 	    end
     end.
 
 %% Function to scale the image properly if only width or height
 %% is set.
-set_size({max, W1, H1}, {W2,H2}) -> 
+set_size({max, W1, H1}, {W2,H2}) ->
     H3 = trunc(W1*H2/W2),
     W3 = trunc(H1*W2/H2),
     if H3 > H1 ->
@@ -1169,7 +1171,7 @@ pdf_handle_info(I,{keywords,Keywords}) ->
 
 
 
-convert(undefined,S) -> 
+convert(undefined,S) ->
     eg_convert:mac2pdf(S);
 convert(Mod, S) ->
     case Mod:encoding() of
